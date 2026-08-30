@@ -1,0 +1,138 @@
+services:
+  # ============================================================
+  # 1. POSTGRESQL DATABASE (with libx509pq/libocsppq/libzlintpq)
+  # ============================================================
+  postgres:
+    build:
+      context: .
+      dockerfile: Dockerfile.postgres
+    container_name: crtsh-postgres
+    environment:
+      POSTGRES_USER: certwatch
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-certwatch_pass}
+      POSTGRES_DB: certwatch
+    ports:
+      - "5432:5432"
+    # Maintenance note: full-text search depends on the GIN identities() indexes
+    # on each "certificate" partition. While ct_monitor ingests at high volume,
+    # run periodically (e.g. once a day):  VACUUM ANALYZE certificate;  so the
+    # planner uses the index.
+    volumes:
+      # PG 18+: the volume must be mounted at /var/lib/postgresql (parent); the
+      # image places the data in /var/lib/postgresql/18/docker.
+      - postgres_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U certwatch"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ============================================================
+  # 2. ct_monitor
+  # ============================================================
+  ct_monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.ct_monitor
+    container_name: crtsh-ct-monitor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./ct_monitor/config.yaml:/root/config.yaml:ro
+
+  # ============================================================
+  # 3. crl_monitor
+  # ============================================================
+  crl_monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.crl_monitor
+    container_name: crtsh-crl-monitor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./crl_monitor/crl_monitor.toml:/root/crl_monitor.toml:ro
+    command: ["-conninfo", "postgres://certwatch:${POSTGRES_PASSWORD:-certwatch_pass}@postgres:5432/certwatch?sslmode=disable"]
+
+  # ============================================================
+  # 4. ocsp_monitor
+  # ============================================================
+  ocsp_monitor:
+    build:
+      context: .
+      dockerfile: Dockerfile.ocsp_monitor
+    container_name: crtsh-ocsp-monitor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./ocsp_monitor/ocsp_monitor.toml:/root/ocsp_monitor.toml:ro
+    command: ["-conninfo", "postgres://certwatch:${POSTGRES_PASSWORD:-certwatch_pass}@postgres:5432/certwatch?sslmode=disable"]
+
+  # ============================================================
+  # 5. OFFICIAL FRONTEND - crtsh-web
+  # ============================================================
+  crtsh-web:
+    build:
+      context: https://github.com/crtsh/crtsh-web.git
+      dockerfile: Dockerfile
+    container_name: crtsh-frontend
+    ports:
+      - "8880:8080"
+      - "8881:8081"
+    environment:
+      - CRTSHWEB_CERTWATCHDB_HOST=postgres
+      - CRTSHWEB_CERTWATCHDB_PORT=5432
+      - CRTSHWEB_CERTWATCHDB_USER=certwatch
+      - CRTSHWEB_CERTWATCHDB_PASSWORD=${POSTGRES_PASSWORD:-certwatch_pass}
+      - CRTSHWEB_CERTWATCHDB_SSLMODE=disable
+      - CRTSHWEB_SERVER_WEBSERVERPORT=8080
+      - CRTSHWEB_SERVER_MONITORINGPORT=8081
+      - CRTSHWEB_LOGGING_LEVEL=info
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ============================================================
+  # 6. cert_processor (closes the loop: populates crl/ocsp_responder/ca_issuer
+  #    and maintains the CA counters; feeds crl/ocsp_monitor)
+  # ============================================================
+  cert_processor:
+    build:
+      context: .
+      dockerfile: Dockerfile.cert_processor
+    container_name: crtsh-cert-processor
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    volumes:
+      - ./cert_processor/config.yaml:/root/config.yaml:ro
+    environment:
+      - CERTPROCESSOR_CERTWATCHDB_PASSWORD=${POSTGRES_PASSWORD:-certwatch_pass}
+
+  # ============================================================
+  # 7. (Optional) Nginx reverse proxy
+  # ============================================================
+  # nginx:
+  #   image: nginx:alpine
+  #   container_name: crtsh-nginx
+  #   ports:
+  #     - "443:443"
+  #     - "80:80"
+  #   volumes:
+  #     - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+  #     - ./ssl:/etc/nginx/ssl:ro
+  #   depends_on:
+  #     - crtsh-web
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:

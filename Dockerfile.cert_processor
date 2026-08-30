@@ -1,0 +1,30 @@
+# ============================================================
+# STAGE 1: Builder - Compile cert_processor
+# ============================================================
+FROM golang:1.26-alpine AS builder
+
+# git is not installed by default in the golang image
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+# Clone the cert_processor repo
+RUN git clone https://github.com/crtsh/cert_processor.git .
+
+# Download dependencies and compile
+RUN go mod download
+RUN go build -o cert_processor .
+
+# ============================================================
+# STAGE 2: Lightweight final image
+# ============================================================
+FROM alpine:3.20
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/cert_processor .
+
+# config.yaml is mounted as a volume at /root/config.yaml
+ENTRYPOINT ["./cert_processor"]

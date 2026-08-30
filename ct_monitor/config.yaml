@@ -1,0 +1,17 @@
+certwatchdb:
+  host: postgres
+  port: 5432
+  user: certwatch
+  password: certwatch_pass
+ctlogs:
+  getSTHFrequency: 1m
+  getEntriesLauncherFrequency: 100ms
+  getEntriesDefaultBatchSize: 256
+  httpTimeout: 30s
+writer:
+  numBackends: 4
+  maxBatchSize: 256
+server:
+  monitoringPort: 8081
+logging:
+  isDevelopment: false

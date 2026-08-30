@@ -1,0 +1,31 @@
+# ============================================================
+# STAGE 1: Builder - Compile ct_monitor
+# ============================================================
+FROM golang:1.26-alpine AS builder
+
+# git is not installed by default in the golang image
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+# Clone the ct_monitor repo
+RUN git clone https://github.com/crtsh/ct_monitor.git .
+
+# Download dependencies and compile
+RUN go mod download
+RUN go build -o ct_monitor .
+
+# ============================================================
+# STAGE 2: Lightweight final image
+# ============================================================
+FROM alpine:3.20
+
+# Install CA certificates
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/ct_monitor .
+
+# config.yaml is mounted as a volume at /root/config.yaml
+ENTRYPOINT ["./ct_monitor"]

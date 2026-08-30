@@ -1,0 +1,31 @@
+# ============================================================
+# STAGE 1: Builder - Compile crl_monitor
+# ============================================================
+FROM golang:1.26-alpine AS builder
+
+# git is not installed by default in the golang image
+RUN apk add --no-cache git
+
+WORKDIR /app
+
+# Clone the crl_monitor repo
+RUN git clone https://github.com/crtsh/crl_monitor.git .
+
+# Download dependencies and compile
+RUN go mod download
+RUN go build -o crl_monitor .
+
+# ============================================================
+# STAGE 2: Lightweight final image
+# ============================================================
+FROM alpine:3.20
+
+RUN apk --no-cache add ca-certificates
+
+WORKDIR /root/
+
+COPY --from=builder /app/crl_monitor .
+
+# The config (crl_monitor.toml) is mounted as a volume at /root/.
+# The connection is passed via the -conninfo flag in compose.
+ENTRYPOINT ["./crl_monitor"]

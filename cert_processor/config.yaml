@@ -1,0 +1,10 @@
+# cert_processor configuration.
+# The password is injected via the CERTPROCESSOR_CERTWATCHDB_PASSWORD env (see compose.yml).
+certwatchdb:
+  host: postgres
+  port: 5432
+  user: certwatch
+server:
+  monitoringPort: 8081
+logging:
+  isDevelopment: false
