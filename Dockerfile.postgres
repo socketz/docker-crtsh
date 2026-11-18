@@ -26,11 +26,11 @@ RUN apt-get update \
 
 # Go >= 1.25 (required by plgo and by the go.mod of libocsppq/libzlintpq).
 # We download the official toolchain from go.dev.
-ARG GO_VERSION=1.26.7
+ARG GO_VERSION=1.27.4
 RUN set -eux; \
     case "$(uname -m)" in \
-        x86_64) set -- amd64 ffb5f8de10c62550dfddab66b36b57030721e0a44a3218e9e1181d7b59f121ca ;; \
-        aarch64|arm64) set -- arm64 5a4ec883379d51ee9ce1040d5e87f8d35e20387574dd8c947feb01eabc3c1b37 ;; \
+        x86_64) set -- amd64 7226736c2339719cda28fbf3a54d71aa63bcefe376e98cef00034268dab24840 ;; \
+        aarch64|arm64) set -- arm64 3392582988a273a87ab5043ee1b2c9c17a2c3c00580bf9326c47a2e0aaaeac92 ;; \
         *) echo "Unsupported architecture: $(uname -m)" >&2; exit 1 ;; \
     esac; \
     curl -fsSL "https://go.dev/dl/go${GO_VERSION}.linux-$1.tar.gz" -o /tmp/go.tgz; \
